@@ -145,7 +145,7 @@ const PolaroidPhoto: React.FC<{ url: string; position: THREE.Vector3; rotation: 
 
 // --- Main Tree System ---
 const TreeSystem: React.FC = () => {
-  const { state, rotationSpeed, rotationBoost, pointer, clickTrigger, setSelectedPhotoUrl, selectedPhotoUrl, panOffset, isMobile, treeConfig } = useContext(TreeContext) as TreeContextType;
+  const { state, rotationSpeed, rotationBoost, pointer, clickTrigger, setSelectedPhotoUrl, selectedPhotoUrl, panOffset, isMobile } = useContext(TreeContext) as TreeContextType;
   const { camera, raycaster } = useThree();
   const pointsRef = useRef<THREE.Points>(null);
   const lightsRef = useRef<THREE.InstancedMesh>(null);
@@ -369,15 +369,6 @@ const TreeSystem: React.FC = () => {
     if (pointsRef.current) {
       // @ts-ignore
       pointsRef.current.material.uniforms.uTime.value = state3d.clock.getElapsedTime();
-
-      // Update Uniforms from Config
-      if (treeConfig) {
-        // @ts-ignore
-        pointsRef.current.material.uniforms.uColor.value.set(treeConfig.primaryColor);
-        // @ts-ignore
-        pointsRef.current.material.uniforms.uColorAccent.value.set(treeConfig.accentColor);
-      }
-
       const positions = pointsRef.current.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < positions.length / 3; i++) {
         const i3 = i * 3; const cx = foliageData.chaos[i3]; const cy = foliageData.chaos[i3 + 1]; const cz = foliageData.chaos[i3 + 2]; const tx = foliageData.tree[i3]; const ty = foliageData.tree[i3 + 1]; const tz = foliageData.tree[i3 + 2];
@@ -434,11 +425,11 @@ const TreeSystem: React.FC = () => {
     <group ref={groupRef}>
       <mesh ref={trunkRef} position={[0, 0, 0]}><cylinderGeometry args={[0.2, 0.8, 14, 8]} /><meshStandardMaterial color="#3E2723" roughness={0.9} metalness={0.1} /></mesh>
       <points ref={pointsRef}> <bufferGeometry> <bufferAttribute attach="attributes-position" count={foliageData.current.length / 3} array={foliageData.current} itemSize={3} /> <bufferAttribute attach="attributes-size" count={foliageData.sizes.length} array={foliageData.sizes} itemSize={1} /> </bufferGeometry> <foliageMaterial transparent depthWrite={false} blending={THREE.AdditiveBlending} /> </points>
-      <instancedMesh ref={lightsRef} args={[undefined, undefined, lightsData.count]}><sphereGeometry args={[0.05, 8, 8]} /><meshStandardMaterial color={treeConfig ? treeConfig.lightColor : "#ffddaa"} emissive={treeConfig ? treeConfig.lightColor : "#ffbb00"} emissiveIntensity={3} toneMapped={false} /></instancedMesh>
+      <instancedMesh ref={lightsRef} args={[undefined, undefined, lightsData.count]}><sphereGeometry args={[0.05, 8, 8]} /><meshStandardMaterial color="#ffddaa" emissive="#ffbb00" emissiveIntensity={3} toneMapped={false} /></instancedMesh>
       {photoObjects.map((obj, index) => (
         <group key={obj.id} ref={(el) => { obj.ref.current = el; }}>
           <PolaroidPhoto
-            url={treeConfig?.photoUrl && index === 0 ? treeConfig.photoUrl : obj.url} // Use custom photo for the first one (or mixed in)
+            url={obj.url}
             position={obj.pos}
             rotation={obj.rot}
             scale={obj.scale}
