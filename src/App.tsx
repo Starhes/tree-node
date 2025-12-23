@@ -1,5 +1,5 @@
 import React, { useState, Suspense, useContext, useEffect, useRef } from 'react';
-import { TreeContextType, AppState, TreeContext, PointerCoords } from './types';
+import { TreeContextType, AppState, TreeContext, PointerCoords, TreeConfig } from './types';
 import Experience from './components/Experience';
 import GestureInput from './components/GestureInput';
 import TechEffects from './components/TechEffects';
@@ -88,6 +88,8 @@ const PhotoModal: React.FC<{ url: string | null, onClose: () => void }> = ({ url
 }
 
 import TouchInput from './components/TouchInput';
+import TreeCreator from './components/TreeCreator';
+import { supabase } from './lib/supabase';
 
 const AppContent: React.FC = () => {
     const { state, setState, webcamEnabled, setWebcamEnabled, pointer, hoverProgress, selectedPhotoUrl, setSelectedPhotoUrl, clickTrigger, isMobile } = useContext(TreeContext) as TreeContextType;
@@ -135,6 +137,9 @@ const AppContent: React.FC = () => {
                 </header>
             </div>
 
+            {/* Side UI */}
+            <TreeCreator />
+
             {/* 光标层 (z-200) */}
             <DreamyCursor pointer={pointer} progress={hoverProgress} />
 
@@ -158,8 +163,46 @@ const App: React.FC = () => {
     const [panOffset, setPanOffset] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
     const [zoomOffset, setZoomOffset] = useState<number>(0);
     const [isMobile, setIsMobile] = useState<boolean>(false);
+    const [treeConfig, setTreeConfig] = useState<TreeConfig | null>(null);
 
     useEffect(() => {
+        const loadSharedTree = async () => {
+            const params = new URLSearchParams(window.location.search);
+            const treeId = params.get('treeId');
+
+            if (treeId) {
+                try {
+                    // Fetch Tree Data
+                    const { data, error } = await supabase
+                        .from('trees')
+                        .select('*')
+                        .eq('id', treeId)
+                        .single();
+
+                    if (error) throw error;
+
+                    if (data) {
+                        const { data: signedData } = await supabase.storage
+                            .from('tree-photos')
+                            .createSignedUrl(data.image_path, 3600);
+
+                        if (signedData?.signedUrl) {
+                            setTreeConfig({
+                                primaryColor: data.colors.primary,
+                                accentColor: data.colors.accent,
+                                lightColor: data.colors.light,
+                                photoUrl: signedData.signedUrl
+                            });
+                            setState('FORMED');
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to load shared tree:", err);
+                }
+            }
+        };
+        loadSharedTree();
+
         const checkMobile = () => {
             const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
             // Simple check for mobile devices
@@ -185,7 +228,8 @@ const App: React.FC = () => {
             panOffset, setPanOffset,
             rotationBoost, setRotationBoost,
             zoomOffset, setZoomOffset,
-            isMobile
+            isMobile,
+            treeConfig, setTreeConfig
         }}>
             <AppContent />
         </TreeContext.Provider>

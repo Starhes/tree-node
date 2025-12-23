@@ -8,6 +8,7 @@
     "@react-three/drei": "^9.88.0",
     "@react-three/fiber": "^8.15.11",
     "@react-three/postprocessing": "^2.16.0",
+    "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/vite": "^4.1.17",
     "framer-motion": "^10.16.4",
     "maath": "^0.10.7",

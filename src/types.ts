@@ -44,6 +44,17 @@ export interface TreeContextType {
   // 新增：缩放偏移量 (双手手势控制)
   zoomOffset: number;
   setZoomOffset: Dispatch<SetStateAction<number>>;
+
+  // 新增：自定义树配置
+  treeConfig: TreeConfig | null;
+  setTreeConfig: Dispatch<SetStateAction<TreeConfig | null>>;
+}
+
+export interface TreeConfig {
+  primaryColor: string; // 树叶主色
+  accentColor: string;  // 树叶强调色
+  lightColor: string;   // 灯光颜色
+  photoUrl?: string;    // 用户上传的照片 (Base64 or URL)
 }
 
 export interface ParticleData {
