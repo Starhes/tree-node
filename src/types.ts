@@ -51,10 +51,11 @@ export interface TreeContextType {
 }
 
 export interface TreeConfig {
-  primaryColor: string; // 树叶主色
-  accentColor: string;  // 树叶强调色
-  lightColor: string;   // 灯光颜色
-  photoUrl?: string;    // 用户上传的照片 (Base64 or URL)
+  primaryColor: string;
+  accentColor: string;
+  lightColor: string;
+  photoUrls?: string[];  // Array of image URLs
+  photoUrl?: string;     // Single URL (legacy/deprecated)
 }
 
 export interface ParticleData {

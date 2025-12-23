@@ -89,7 +89,9 @@ const PhotoModal: React.FC<{ url: string | null, onClose: () => void }> = ({ url
 
 import TouchInput from './components/TouchInput';
 import TreeCreator from './components/TreeCreator';
-import { supabase } from './lib/supabase';
+// import { supabase } from './lib/supabase'; // REMOVED
+
+const API_BASE_URL = 'http://localhost:3000'; // Change this for production deployment
 
 const AppContent: React.FC = () => {
     const { state, setState, webcamEnabled, setWebcamEnabled, pointer, hoverProgress, selectedPhotoUrl, setSelectedPhotoUrl, clickTrigger, isMobile } = useContext(TreeContext) as TreeContextType;
@@ -172,29 +174,20 @@ const App: React.FC = () => {
 
             if (treeId) {
                 try {
-                    // Fetch Tree Data
-                    const { data, error } = await supabase
-                        .from('trees')
-                        .select('*')
-                        .eq('id', treeId)
-                        .single();
+                    // Fetch Tree Data from Local Server
+                    const response = await fetch(`${API_BASE_URL}/api/tree/${treeId}`);
+                    if (!response.ok) throw new Error('Tree not found');
 
-                    if (error) throw error;
+                    const data = await response.json();
 
                     if (data) {
-                        const { data: signedData } = await supabase.storage
-                            .from('tree-photos')
-                            .createSignedUrl(data.image_path, 3600);
-
-                        if (signedData?.signedUrl) {
-                            setTreeConfig({
-                                primaryColor: data.colors.primary,
-                                accentColor: data.colors.accent,
-                                lightColor: data.colors.light,
-                                photoUrl: signedData.signedUrl
-                            });
-                            setState('FORMED');
-                        }
+                        setTreeConfig({
+                            primaryColor: data.colors.primary,
+                            accentColor: data.colors.accent,
+                            lightColor: data.colors.light,
+                            photoUrls: data.imageUrls
+                        });
+                        setState('FORMED');
                     }
                 } catch (err) {
                     console.error("Failed to load shared tree:", err);

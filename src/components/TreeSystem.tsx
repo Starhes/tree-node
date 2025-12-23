@@ -145,7 +145,7 @@ const PolaroidPhoto: React.FC<{ url: string; position: THREE.Vector3; rotation: 
 
 // --- Main Tree System ---
 const TreeSystem: React.FC = () => {
-  const { state, rotationSpeed, rotationBoost, pointer, clickTrigger, setSelectedPhotoUrl, selectedPhotoUrl, panOffset, isMobile } = useContext(TreeContext) as TreeContextType;
+  const { state, rotationSpeed, rotationBoost, pointer, clickTrigger, setSelectedPhotoUrl, selectedPhotoUrl, panOffset, isMobile, treeConfig } = useContext(TreeContext) as TreeContextType;
   const { camera, raycaster } = useThree();
   const pointsRef = useRef<THREE.Points>(null);
   const lightsRef = useRef<THREE.InstancedMesh>(null);
@@ -188,33 +188,47 @@ const TreeSystem: React.FC = () => {
     for (let i = 0; i < lightCount * 3; i++) lightChaos[i] = lSphere[i];
     for (let i = 0; i < lightCount; i++) { const i3 = i * 3; const t = i / lightCount; const h = t * 13; const coneRadius = (14 - h) * 0.48; const angle = t * Math.PI * 25; lightTree[i3] = Math.cos(angle) * coneRadius; lightTree[i3 + 1] = h - 6; lightTree[i3 + 2] = Math.sin(angle) * coneRadius; }
 
-    // 实际存在的照片文件列表
-    const photoFiles = [
+    // 实际存在的照片文件列表 (Default Fallback)
+    let photoFiles = [
       "2024_06_1.jpg", "2024_07_1.jpg", "2024_07_2.jpg",
       "2024_09_1.jpg", "2024_09_2.jpg", "2024_09_3.jpg",
       "2024_09_4.jpg", "2024_09_5.jpg", "2024_09_6.jpg",
-      "2024_10_1.jpg", "2024_11_1.jpg", "2024_12_1.jpg",
-      "2024_12_2.jpg", "2024_12_3.jpg", "2025_01_1.jpg",
-      "2025_01_2.jpg", "2025_01_3.jpg", "2025_01_4.jpg",
-      "2025_01_5.jpg", "2025_01_6.jpg", "2025_01_7.jpg",
-      "2025_02_1.jpg", "2025_05_1.jpg", "2025_06_1.jpg",
-      "2025_06_2.jpg", "2025_06_3.jpg", "2025_09_1.jpg",
-      "2025_10_1.jpg", "2025_10_2.jpg", "2025_11_1.jpg",
-      "2025_11_2.jpg"
+      "2024_10_1.jpg", "2024_11_1.jpg", "2024_12_1.jpg", // ...
     ];
 
-    // 按时间排序
-    photoFiles.sort();
+    // If User has uploaded photos, override or append
+    let userPhotos: string[] = [];
+    if (treeConfig?.photoUrls && treeConfig.photoUrls.length > 0) {
+      userPhotos = treeConfig.photoUrls;
+      // OPTION: Override completely or Mix?
+      // Let's mix them or put them at the TOP (most recent)
+      // For now, let's just make sure they appear. If array is small, repeat them?
+    } else if (treeConfig?.photoUrl) {
+      userPhotos = [treeConfig.photoUrl];
+    }
 
-    const photoCount = photoFiles.length;
+    // Logic: If user photos exist, we want them to be prominent. 
+    // Let's replace the 'end' of the array (most recent years) with user photos
+
+    // Helper to generate User Photo Data
+    const photoCount = isMobile ? 20 : 35; // Total dynamic photos
     const photos: ParticleData[] = [];
 
     for (let i = 0; i < photoCount; i++) {
-      const fileName = photoFiles[i];
-      // 解析文件名: YYYY_MM_ID.jpg
-      const parts = fileName.split('_');
-      const year = parseInt(parts[0]);
-      const month = parts[1]; // Keep as string "02"
+      let imageUrl: string;
+      let pYear = 2025;
+      let pMonth = '12';
+
+      // Use user photos if available
+      if (userPhotos.length > 0) {
+        // Cycle through user photos
+        imageUrl = userPhotos[i % userPhotos.length];
+      } else {
+        // Fallback to random default photos
+        const rIdx = i % photoFiles.length;
+        imageUrl = `/photos/${photoFiles[rIdx]}`;
+      }
+
 
       // --- FORMED: Time Spiral Layout ---
       // 螺旋上升: i 越大 (越新)，h 越高
@@ -241,13 +255,11 @@ const TreeSystem: React.FC = () => {
       const chaosY = r * Math.sin(phi) * Math.sin(theta) * 0.6; // Y轴压扁一点，形成椭球
       const chaosZ = r * Math.cos(phi);
 
-      const imageUrl = `/photos/${fileName}`;
-
       photos.push({
         id: `photo-${i}`,
         type: 'PHOTO',
-        year: year,
-        month: month,
+        year: pYear,
+        month: pMonth,
         chaosPos: [chaosX, chaosY, chaosZ],
         treePos: [treeX, treeY, treeZ],
         chaosRot: [
@@ -262,7 +274,7 @@ const TreeSystem: React.FC = () => {
       });
     }
     return { foliageData: { current: foliage, chaos: foliageChaos, tree: foliageTree, sizes }, photosData: photos, lightsData: { chaos: lightChaos, tree: lightTree, count: lightCount } };
-  }, []);
+  }, [isMobile, treeConfig]);
 
   useEffect(() => {
     setPhotoObjects(photosData.map(p => ({ id: p.id, url: p.image!, ref: React.createRef(), data: p, pos: new THREE.Vector3(), rot: new THREE.Euler(), scale: p.scale })));

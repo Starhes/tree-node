@@ -114,3 +114,11 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# User uploads (stored locally, not in repo)
+uploads/*
+!uploads/README.md
+
+# SQLite database
+server/*.sqlite
+server/*.sqlite-journal

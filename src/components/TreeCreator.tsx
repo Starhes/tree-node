@@ -2,8 +2,13 @@ import React, { useState, useContext, useEffect } from 'react';
 import { TreeContext, TreeContextType } from '../types';
 import { analyzeImage } from '../utils/analyzeImage';
 import { compressToWebP } from '../utils/imageCompression';
-import { supabase } from '../lib/supabase';
+
+// import { supabase } from '../lib/supabase'; // REMOVED
 import { motion, AnimatePresence } from 'framer-motion';
+
+// CONFIG: Accessing the API URL (In standard Vite setup, proxied or env var)
+// For now we assume local dev or relative path if served together
+const API_BASE_URL = 'http://localhost:3000'; // Change this for production deployment
 
 const TreeCreator: React.FC = () => {
     const { setTreeConfig, treeConfig } = useContext(TreeContext) as TreeContextType;
@@ -13,7 +18,8 @@ const TreeCreator: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [shareUrl, setShareUrl] = useState<string | null>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [processingStatus, setProcessingStatus] = useState<string>('');
 
     // Initial check for URL params (Legacy query params support handled in App.tsx now mostly)
     useEffect(() => {
@@ -22,12 +28,13 @@ const TreeCreator: React.FC = () => {
     }, [setTreeConfig]);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            setSelectedFile(file);
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files);
+            setSelectedFiles(files);
             setIsProcessing(true);
             try {
-                const { colors, originalUrl } = await analyzeImage(file);
+                // Use the first image for color analysis
+                const { colors, originalUrl } = await analyzeImage(files[0]);
                 setColors(colors);
                 setPreviewUrl(originalUrl);
 
@@ -36,7 +43,8 @@ const TreeCreator: React.FC = () => {
                     primaryColor: colors[0],
                     accentColor: colors[1],
                     lightColor: colors[2],
-                    photoUrl: originalUrl // Local blob URL
+                    // We only preview the first one for now or all (need to update TreeConfig)
+                    photoUrls: files.map(f => URL.createObjectURL(f))
                 });
 
                 setShareUrl(null); // Reset share URL since content changed
@@ -49,54 +57,50 @@ const TreeCreator: React.FC = () => {
     };
 
     const generateShareLink = async () => {
-        if (!treeConfig || !selectedFile) return;
+        if (!treeConfig || selectedFiles.length === 0) return;
         setIsUploading(true);
+        setProcessingStatus('Compressing...');
 
         try {
-            // 1. Compress Image
-            const compressedBlob = await compressToWebP(selectedFile);
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+            const formData = new FormData();
 
-            // 2. Upload to Supabase Storage
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('tree-photos') // Using public bucket 'tree-photos'
-                .upload(fileName, compressedBlob, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
+            // 1. Compress All Images
+            for (let i = 0; i < selectedFiles.length; i++) {
+                setProcessingStatus(`Compressing ${i + 1}/${selectedFiles.length}...`);
+                const compressed = await compressToWebP(selectedFiles[i]);
+                formData.append('files', compressed, `image-${i}.webp`);
+            }
 
-            if (uploadError) throw uploadError;
+            setProcessingStatus('Uploading...');
+            formData.append('primary', treeConfig.primaryColor);
+            formData.append('accent', treeConfig.accentColor);
+            formData.append('light', treeConfig.lightColor);
 
-            // 3. Save Record to DB
-            const { data: dbData, error: dbError } = await supabase
-                .from('trees')
-                .insert([
-                    {
-                        image_path: uploadData.path,
-                        colors: {
-                            primary: treeConfig.primaryColor,
-                            accent: treeConfig.accentColor,
-                            light: treeConfig.lightColor
-                        }
-                    }
-                ])
-                .select()
-                .single();
+            // 2. Upload to Server
+            const response = await fetch(`${API_BASE_URL}/api/upload`, {
+                method: 'POST',
+                body: formData
+            });
 
-            if (dbError) throw dbError;
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
 
-            // 4. Generate Link
-            if (dbData) {
-                const url = `${window.location.origin}${window.location.pathname}?treeId=${dbData.id}`;
+            const data = await response.json();
+
+            // 3. Generate Link
+            if (data.id) {
+                const url = `${window.location.origin}${window.location.pathname}?treeId=${data.id}`;
                 setShareUrl(url);
                 navigator.clipboard.writeText(url);
             }
 
         } catch (error) {
             console.error('Error sharing tree:', error);
-            alert('Failed to generate share link. Please check your internet connection or Supabase config.');
+            alert('Failed to share tree. Please ensure the server is running.');
         } finally {
             setIsUploading(false);
+            setProcessingStatus('');
         }
     };
 
@@ -121,10 +125,11 @@ const TreeCreator: React.FC = () => {
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-xs uppercase tracking-wider text-gray-400 mb-2">Upload Photo for Inspiration</label>
+                                <label className="block text-xs uppercase tracking-wider text-gray-400 mb-2">Upload Photos (Max 10)</label>
                                 <input
                                     type="file"
                                     accept="image/*"
+                                    multiple
                                     onChange={handleFileChange}
                                     className="block w-full text-sm text-slate-300
                                       file:mr-4 file:py-2 file:px-4
@@ -158,14 +163,14 @@ const TreeCreator: React.FC = () => {
                                 </div>
                             )}
 
-                            {treeConfig && selectedFile && (
+                            {treeConfig && selectedFiles.length > 0 && (
                                 <div className="pt-4 border-t border-white/10">
                                     <button
                                         onClick={generateShareLink}
                                         disabled={isUploading}
                                         className={`w-full py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg font-bold cinzel shadow-[0_0_15px_rgba(251,191,36,0.2)] transition-all ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
-                                        {isUploading ? '⌛ Uploading & Securing...' : '🔗 Share This Design'}
+                                        {isUploading ? processingStatus : `🔗 Share ${selectedFiles.length} Photos`}
                                     </button>
                                     {shareUrl && (
                                         <div className="mt-2 p-2 bg-emerald-900/30 rounded text-xs text-emerald-200 border border-emerald-500/30">
